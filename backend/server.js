@@ -81,6 +81,38 @@ app.get("/tickets/:id", (req, res) => {
     });
 });
 
+// post/users - creates a new user
+app.post("/users", (req, res) => {
+    const {first_name, last_name, email, password, role, department_id} = req.body;
+    
+    // check required fields
+    if(!first_name || !last_name || !email || !password){
+        return res.status(400).json({error: "first_name, last_name, email, and password are required"});
+    }
+    
+    // password rule #1: minimum 8 characters
+    if(password.length <8){
+        return res.status(400).json({error: "password must be at least 8 characters long"});
+    }
+    
+    // password rule #2: at least one special character
+    const specialChar = /[!@#$%]/;
+    if (!specialChar.test(password)){
+        return res.status(400).json({error: "password must include one special character:! @ # $ %"});
+    }
+    const sql = "INSERT INTO users (first_name, last_name, email, password, role, department_id) VALUES (?, ?, ?, ?, ?, ?)";
+    const userRole = role || "employee";
+    const deptId = department_id || null;
+    
+    db.query(sql,[first_name, last_name, email, password, userRole, deptId], (error, results) => {
+        if(error){
+            console.error("error creating user:", error);
+            return res.status(500).json({error: "failed to creat user"});
+        }
+        res.status(201).json({message: "user created successfully", userId: results.insertId});
+    });
+});
+
 // MONGODB ROUTES ------------------------------------
 
 // get/ticket-notes - returns all ticket notes from mongodb
