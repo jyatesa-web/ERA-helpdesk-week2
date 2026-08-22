@@ -152,6 +152,55 @@ app.post("/tickets", async (req, res) => {
     });
 });
 
+// post/login-validates credentials and returns user info with role
+app.post("/login", async (req, res) => {
+    const {email, password} = req.body;
+    
+    // validate required fields
+    if(!email || !password){
+        return res.status(400).json({error: "email and password are required"});
+    }
+    // Lookup user by email
+    const sql = "SELECT * FROM users WHERE email = ?";
+    db.query(sql, [email], async (error, results) => {
+        if(error){
+            console.error("login query error:", error);
+            return res.status(500).json({error: "Something went wrong"});
+        }
+        // Check if user exists
+        if(results.length === 0){
+            return res.status(401).json({error: "invalid email or password"});
+        }
+        const user = results[0];
+        // Check password
+        if(user.password !== password){
+            return res.status(401).json({error: "Invalid email or password"});
+        }
+        // Automatically log the login action to MongDB
+        try{
+            const mongoDb = getMongo();
+            await mongoDb.collection("activity_logs").insertOne({
+                action: "user_login",
+                user_id: user.id,
+                ticket_id: null,
+                details: `${user.first_name} ${user.last_name} logged in as ${user.role}`,
+                timestamp: new Date()
+            });
+        }catch(mongoError){
+            console.error("failed to log login activity:", mongoError);
+            // Do not fail the login if logging fails
+        }
+        // return user info including role
+        res.status(200).json({
+            message: "login successful", 
+            first_name: user.first_name,
+            last_name: user.last_name,
+            role: user.role,
+            user_id: user.id
+        });
+    });
+});
+
 // post/ticket_notes
 app.post("/ticket-notes", async (req, res) => {
     const {ticket_id, note, added_by} = req.body;
