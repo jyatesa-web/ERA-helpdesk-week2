@@ -113,6 +113,88 @@ app.post("/users", (req, res) => {
     });
 });
 
+// POST/tickets
+app.post("/tickets", async (req, res) => {
+    const {title, description, priority, status, submitted_by, assigned_to, department_id} = req.body;
+    
+    // validate required fields
+    if(!title || !submitted_by){
+        return res.status(400).json({error: "title and submitted_by are required"});
+    }
+    const ticketPriority = priority || "medium";
+    const ticketStatus = status || "open";
+    const assignedTo = assigned_to || null;
+    const deptId = department_id || null;
+    const sql = "INSERT INTO tickets (title, description, priority, status, submitted_by, assigned_to, department_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    
+    db.query(sql, [title, description, ticketPriority, ticketStatus, submitted_by, assignedTo, deptId], async (error, results) => {
+        if(error){
+            console.error("error creating ticket:", error);
+            return res.status(500).json({error: "failed to create ticket"});
+        }
+        const newTicketId = results.insertId;
+        
+        // automatically log this action to MongoDB
+        try{
+            const mongoDb = getMongo();
+            await mongoDb.collection("activity_logs").insertOne({
+                action: "ticket_created",
+                user_id: submitted_by,
+                ticket_id: newTicketId,
+                details: `Ticket_created: ${title}`,
+                timestamp: new Date()
+            });
+        }catch(mongoError){
+            console.error("failed to log activity:", mongoError);
+            // do not fail the request if logging fails
+        }
+        res.status(201).json({message: "ticket created successfully", ticketId: newTicketId});
+    });
+});
+
+// post/ticket_notes
+app.post("/ticket-notes", async (req, res) => {
+    const {ticket_id, note, added_by} = req.body;
+    if(!ticket_id || !note || !added_by){
+        return res.status(400).json({error: "Ticket_id, note and added_by are required"});
+    }
+    try{
+        const mongoDb = getMongo();
+        const result = await mongoDb.collection("ticket_notes").insertOne({
+            ticket_id: parseInt(ticket_id), 
+            note: note,
+            added_by: added_by,
+            created_at: new Date()
+        });
+        res.status(201).json({message: "Note added successfully", noteId: result.insertedId});
+    }catch(error){
+        console.error("error adding note:", error);
+        res.status(500).json({error: "Failed to add note"});
+    }
+});
+
+// post/ activity-logs -manually add activity logs in MongoDB
+app.post("/activity-logs", async (req, res) => {
+    const{action, user_id, ticket_id, details} = req.body;
+    if(!action || !details){
+        return res.status(400).json({error: "action and details are required"});
+    }
+    try{
+        const mongoDb = getMongo();
+        const result = await mongoDb.collection("activity_logs").insertOne({
+            action: action,
+            user_id: user_id || null,
+            ticket_id: ticket_id || null,
+            details: details,
+            timestamp: new Date()
+        });
+        res.status(201).json({message: "Activity log created", logId: result.insertedId});
+    }catch(error){
+        console.error("error creating activity log:", error);
+        res.status(500).json({error: "Failed to create activity log"});
+    }
+});
+
 // MONGODB ROUTES ------------------------------------
 
 // get/ticket-notes - returns all ticket notes from mongodb
