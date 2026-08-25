@@ -65,6 +65,34 @@ app.get("/tickets/open", (req, res) => {
     });
 });
 
+// get/tickets/details-returns all tickets with joined user and department names
+app.get("/tickets/details", (req, res) => {
+    const sql = "SELECT t.id AS ticket_id, t.title, t.description, t.priority, t.status, t.created_at, CONCAT(u1.first_name, ' ', u1.last_name) AS submitted_by, CONCAT(u2.first_name, ' ', u2.last_name) AS assigned_to, d.name AS department FROM tickets t JOIN users u1 ON t.submitted_by = u1.id LEFT JOIN users u2 ON t.assigned_to = u2.id JOIN departments d ON t.department_id = d.id ORDER BY t.created_at DESC";
+    db.query(sql, (error, results) => {
+        if(error){
+            console.error("error getting ticket details:", error);
+            return res.status(500).json({error:"failed to get ticket details"});
+        }
+        res.json(results);
+    });
+});
+
+// get/tickets/:id/details-returns one ticket with joined names
+app.get("/tickets/:id/details", (req, res) => {
+    const ticketId = req.params.id;
+    const sql = "SELECT t.id AS ticket_id, t.title, t.description, t.priority, t.status, t.created_at, CONCAT(u1.first_name, ' ', u1.last_name) AS submitted_by, CONCAT(u2.first_name, ' ', u2.last_name) AS assigned_to, d.name AS department FROM tickets t JOIN users u1 ON t.submitted_by = u1.id LEFT JOIN users u2 ON t.assigned_to = u2.id JOIN departments d ON t.department_id = d.id WHERE t.id = ?";
+    db.query(sql, [ticketId], (error, results) => {
+        if(error){
+            console.error("error getting ticket details:", error);
+            return res.status(500).json({error: "failed to get ticket details"});
+        }
+        if (res.length === 0){
+            return res.status(404).json({error: "ticket not found"});
+        }
+        res.json(results[0]);
+    });
+});
+
 // get/tickets/:id
 app.get("/tickets/:id", (req, res) => {
     const ticketId = req.params.id;
